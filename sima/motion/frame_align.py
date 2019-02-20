@@ -49,7 +49,8 @@ class PlaneTranslation2D(motion.MotionEstimationStrategy):
     """
 
     def __init__(self, max_displacement=None, method='correlation',
-                 n_processes=1, **method_kwargs):
+                 n_processes=1, template=None, template_weight=100,
+                 **method_kwargs):
         self._params = dict(locals())
         del self._params['self']
 
@@ -69,12 +70,13 @@ class PlaneTranslation2D(motion.MotionEstimationStrategy):
         params = self._params
         return _frame_alignment_base(
             dataset, params['max_displacement'], params['method'],
-            params['n_processes'], **params['method_kwargs'])[0]
+            params['n_processes'], params['template'], params['template_weight'],
+            **params['method_kwargs'])[0]
 
 
 def _frame_alignment_base(
         dataset, max_displacement=None, method='correlation', n_processes=1,
-        **method_kwargs):
+        template=None, template_weight=100, **method_kwargs):
     """Estimate whole-frame displacements based on pixel correlations.
 
     Parameters
@@ -106,8 +108,16 @@ def _frame_alignment_base(
     else:
         namespace = Struct()
     namespace.offset = np.zeros(3, dtype=int)
-    namespace.pixel_counts = np.zeros(dataset.frame_shape)  # TODO: int?
-    namespace.pixel_sums = np.zeros(dataset.frame_shape).astype('float64')
+    if template is not None:
+        namespace.pixel_counts = np.ones(dataset.frame_shape) * template_weight
+
+        size_diff = [x - y for x, y in zip(dataset.frame_shape, template.shape)]
+        pads = [(int(np.ceil(x / 2.)), int(np.floor(x / 2.))) for x in size_diff]
+        namespace.pixel_sums = np.pad(template.astype('float64'),
+                                      pad_width=pads, mode='constant') * template_weight
+    else:
+        namespace.pixel_counts = np.zeros(dataset.frame_shape)  # TODO: int?
+        namespace.pixel_sums = np.zeros(dataset.frame_shape).astype('float64')
     # NOTE: float64 gives nan when divided by 0
     namespace.shifts = [
         np.zeros(seq.shape[:2] + (3,), dtype=int) for seq in dataset]
