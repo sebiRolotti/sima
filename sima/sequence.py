@@ -1499,6 +1499,7 @@ class _SpatialFilterSequence(_WrapperSequence):
             filtered_frame = gaussian_filter(ch_frame, sigma=3)
             clipped = np.clip(filtered_frame,
                               np.nanpercentile(filtered_frame, 50),
+                              # 250,
                               np.nanpercentile(filtered_frame, 99.5))
 
             ch_frames.append(clipped)
@@ -1524,4 +1525,50 @@ class _SpatialFilterSequence(_WrapperSequence):
         return {
             '__class__': self.__class__,
             'base': self._base._todict(savedir),
+        }
+
+
+class _SplicedSequence(_WrapperSequence):
+    """Sequence for splicing together nonconsecutive frames
+    Parameters
+    ----------
+    base : Sequence
+    times : list of frame indices of the base sequence
+    """
+    def __init__(self, base, times):
+        super(_SplicedSequence, self).__init__(base)
+        self._base_len = len(base)
+        self._times = times
+
+    def __iter__(self):
+        try:
+            for t in self._times:
+                # Not sure if np.copy is needed here (see _IndexedSequence)
+                yield np.copy(self._base._get_frame(t))
+        except NotImplementedError:
+            if self._indices[0].step < 0:
+                raise NotImplementedError(
+                    'Iterating backwards not supported by the base class')
+            idx = 0
+            for t, frame in enumerate(self._base):
+                try:
+                    whether_yield = t == self._times[idx]
+                except IndexError:
+                    raise StopIteration
+                if whether_yield:
+                    # Not sure if np.copy is needed here (see _IndexedSequence)
+                    yield np.copy(frame)
+                    idx += 1
+
+    def _get_frame(self, t):
+        return self._base._get_frame(self._times[t])
+
+    def __len__(self):
+        return len(self._times)
+
+    def _todict(self, savedir=None):
+        return {
+            '__class__': self.__class__,
+            'base': self._base._todict(savedir),
+            'times': self._times
         }

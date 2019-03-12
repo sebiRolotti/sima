@@ -260,7 +260,7 @@ def cross_correlation_2d(pixels1, pixels2):
     return corrnorm
 
 
-def align_cross_correlation(pixels1, pixels2, displacement_bounds=None):
+def align_cross_correlation(pixels1, pixels2, displacement_bounds=None, mask=None):
     '''Align the second image with the first using max cross-correlation
 
     returns the y,x offsets to add to image1's indexes to align it with
@@ -279,6 +279,10 @@ def align_cross_correlation(pixels1, pixels2, displacement_bounds=None):
         corr = cross_correlation_3d
     else:
         raise ValueError
+
+    if mask is not None:
+        pixels1[mask] = np.nan
+        # pixels2[mask] = np.nan
 
     corrnorm = old_div(sum(corr(pixels1[..., c], pixels2[..., c])
                        for c in range(pixels1.shape[-1])), pixels1.shape[-1])

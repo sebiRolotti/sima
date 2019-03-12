@@ -50,7 +50,7 @@ class PlaneTranslation2D(motion.MotionEstimationStrategy):
 
     def __init__(self, max_displacement=None, method='correlation',
                  n_processes=1, template=None, template_weight=100,
-                 **method_kwargs):
+                 mask=None, **method_kwargs):
         self._params = dict(locals())
         del self._params['self']
 
@@ -108,6 +108,10 @@ def _frame_alignment_base(
     else:
         namespace = Struct()
     namespace.offset = np.zeros(3, dtype=int)
+
+    # if mask is not None:
+    #     nan_idx = np.where(mask == 0)
+
     if template is not None:
         namespace.pixel_counts = np.ones(dataset.frame_shape) * template_weight
 
@@ -118,6 +122,11 @@ def _frame_alignment_base(
     else:
         namespace.pixel_counts = np.zeros(dataset.frame_shape)  # TODO: int?
         namespace.pixel_sums = np.zeros(dataset.frame_shape).astype('float64')
+
+    # if mask is not None:
+    #     namespace.pixel_counts[nan_idx] = np.nan
+    #     namespace.pixel_sums[nan_idx] = np.nan
+
     # NOTE: float64 gives nan when divided by 0
     namespace.shifts = [
         np.zeros(seq.shape[:2] + (3,), dtype=int) for seq in dataset]
@@ -468,8 +477,8 @@ def pyr_down_3d(image, axes=None):
     return filtered_image[slices]
 
 
-def base_alignment(reference, target, bounds=None):
-    return align_cross_correlation(reference, target, bounds)[0]
+def base_alignment(reference, target, bounds=None, mask=None):
+    return align_cross_correlation(reference, target, bounds, mask=mask)[0]
 
 
 def within_bounds(displacement, bounds):
@@ -481,7 +490,7 @@ def within_bounds(displacement, bounds):
 
 
 def pyramid_align(reference, target, min_shape=32, max_levels=None,
-                  bounds=None):
+                  bounds=None, mask=None):
     """
     Parameters
     ----------
@@ -490,6 +499,11 @@ def pyramid_align(reference, target, min_shape=32, max_levels=None,
         Shape: (2, D).
 
     """
+    if mask is not None:
+        max_levels = 0
+        nan_idx = np.where(mask == 0)
+    else:
+        nan_idx = None
 
     if max_levels is None:
         max_levels = np.inf
@@ -530,4 +544,4 @@ def pyramid_align(reference, target, min_shape=32, max_levels=None,
             warnings.warn('Could not align all frames.')
         return best_displacement
     else:
-        return base_alignment(reference, target, bounds)
+        return base_alignment(reference, target, bounds, mask=nan_idx)
